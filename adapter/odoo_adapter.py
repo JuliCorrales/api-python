@@ -1,6 +1,6 @@
 from xmlrpc import client
-from werkzeug.exceptions import HTTPException
 from os import environ
+from fastapi import HTTPException, status
 import logging
 
 ODOO_URL = environ.get('ODOO_URL')
@@ -10,11 +10,10 @@ ODOO_PASSWD = environ.get('ODOO_PASSWD')
 
 
 class OdooAdapter:
-
     instance = None
 
     uid: int
-    common = client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
+    common = client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL), allow_none=True)
     models = client.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL), allow_none=True)
 
     def __init__(self, user='', passwd='', global_instance=True):
@@ -37,21 +36,18 @@ class OdooAdapter:
                 {}
             )
         except Exception as e:
-            logging.error(str(e))
-
+            pass
         if not self.uid:
-            logging.error('Error al iniciar sesión en Odoo')
+            pass
 
     def execute(self, model, method, *args, **kwargs):
         if not self.uid:
-            logging.warning('No se inició sesión en Odoo CRM, reintentando')
             self.login()
 
         if not self.uid:
-            return {
-                'status': 504,
-                'error': f'No se puede conectar con el servidor de Odoo ({self.uid})',
-            }
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='No se puede conectar con el '
+                                                                                        'servidor de Odoo. ('
+                                                                                        'uid %s)' % self.uid)
 
         try:
             return self.models.execute_kw(
@@ -59,31 +55,16 @@ class OdooAdapter:
                 model, method,
                 list(args), kwargs
             )
+
         except client.Fault as cf:
             logging.error(str(cf))
-            raise cf
-        except TypeError as te:
-            logging.error(str(te))
-            raise HTTPException(description=str(te))
-        except Exception as e:
-            logging.error(str(e))
-            odoo_exception = self.is_odoo_exception(e)
-            if odoo_exception:
-                return {
-                    'status': 418, #or 409, 423,
-                    'error': odoo_exception
-                }
-            return {
-                'status': 504,
-                'error': 'No se puede conectar con el servidor de Odoo',
-            }
-    def is_odoo_exception(self, error):
-        try:
-            faultStr = error.faultString.split(f"\n")
+            # raise cf
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                detail=f'{cf.faultString} ({cf.faultCode})')
 
-            for line in faultStr:
-                if 'odoo.exceptions' in line:
-                    return line
-            return False
-        except:
-            return False
+        except Exception as ex:
+            logging.error(str(ex))
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Error al ejecutar el método '
+                                                                                        '%s contra el servidor de '
+                                                                                        'Odoo -> %s' % (method,
+                                                                                                        str(ex)))

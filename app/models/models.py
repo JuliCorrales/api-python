@@ -6,3 +6,7 @@ class Client(BaseModel):
     email: str
     username: str
     password: str
+
+class LoginForm(BaseModel):
+    username: str
+    password: str

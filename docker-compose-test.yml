@@ -1,0 +1,15 @@
+version: '3.1'
+
+services:
+  fastapi-test:
+    container_name: proyect_sales_api_test
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - test.env
+    environment:
+      - PORT=8001

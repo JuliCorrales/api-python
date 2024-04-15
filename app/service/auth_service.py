@@ -32,7 +32,11 @@ class AuthService:
                 client.dict()
             )
             if response_client:
-                return response_client
+                if response_client.get('status_code') != 200:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                        detail=response_client.get('text'))
+                else:
+                    return response_client
             else:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                                     detail='No se puedo crear correctamente el registro del cliente.')
@@ -57,6 +61,6 @@ class AuthService:
                 raise HTTPException(status_code=400, detail="Nombre de usuario o contraseña incorrectos")
 
         except HTTPException as httpe:
-            raise httpe
+            return str(httpe)
         except Exception as e:
-            raise e
+            return str(e)
